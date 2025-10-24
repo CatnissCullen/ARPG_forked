@@ -1,0 +1,54 @@
+# Configuration for ARPG with RL Policy Optimization
+
+# Output directory
+output_dir: ./outputs/arpg_rl
+
+# Data
+data_dir: /path/to/imagenet
+
+# ARPG Model
+arpg_checkpoint: /path/to/arpg_checkpoint.pt
+
+model:
+  dim: 4096
+  n_layer: 32
+  n_head: 32
+  vocab_size: 16384
+  block_size: 256
+  num_classes: 1000
+
+# Policy Network
+policy:
+  state_dim: 19  # 11 basic stats + 8 region coverage (adjust if using features)
+  hidden_dim: 256
+  max_parallel: 32
+
+# Training
+training:
+  num_epochs: 10
+  batch_size: 1  # Start with 1 for debugging
+  num_workers: 4
+  learning_rate: 1.0e-4
+  
+  # GRPO parameters
+  group_size: 4  # Number of samples per group
+  clip_epsilon: 0.2  # PPO clipping parameter
+  entropy_coef: 0.01  # Entropy regularization
+  
+  # Generation parameters
+  max_steps: 20
+  target_steps: 10
+  temperature: 1.0
+  cfg_scale: 1.0
+
+# Reward
+reward:
+  clip_weight: 1.0
+  quality_weight: 0.5
+  efficiency_weight: 0.3
+
+# Logging
+logging:
+  log_interval: 10
+  save_interval: 100
+  eval_interval: 500
