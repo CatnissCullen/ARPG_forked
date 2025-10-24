@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="9c921bf7-316b-4147-b024-924e75024f3b" name="ARPG">
+        <fileTransfer rootFolder="/home/ma-user/work/ypq/ARPG" accessType="SFTP" host="10.74.98.84" port="32756" sshConfigId="f34ab449-613f-40ce-a83b-7432fd34fb13" sshConfig="ma-user@10.74.98.84:32756 key" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
