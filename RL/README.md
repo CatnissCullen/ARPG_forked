@@ -64,8 +64,8 @@ This is done through **Group Relative Policy Optimization (GRPO)**, which doesn'
 
 ```
 arpg_rl/
-├── arpg_rl_framework.py    # Core RL framework
-├── train_arpg_rl.py        # Training script
+├── arpg_rl.py    # Core RL framework
+├── train_rl.py        # Training script
 ├── configs/
 │   └── arpg_rl.yaml        # Configuration file
 ├── arpg.py                 # Original ARPG model

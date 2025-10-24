@@ -10,8 +10,8 @@ os.environ['TRANSFORMERS_OFFLINE'] = '1'
 
 print(torch.cuda.is_available())
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-pipeline = DiffusionPipeline.from_pretrained("./hfg_weights/", custom_pipeline="./hfg_weights/",
-                                             cache_dir="./hfg_weights/",
+pipeline = DiffusionPipeline.from_pretrained("./hfg_weights/arpg", custom_pipeline="./hfg_weights/arpg",
+                                             cache_dir="./hfg_weights/arpg",
                                              force_download=False, resume_download=False,
                                              local_files_only=True)
 

@@ -46,7 +46,7 @@ class ARPGModel(DiffusionPipeline):
         #     filename=kwargs.get("model_filename", model_path)
         # )
         cur_dir = os.getcwd()
-        local_files_dir = os.path.join(cur_dir, "hfg_weights")
+        local_files_dir = os.path.join(cur_dir, "hfg_weights/arpg")
         model_filename = kwargs.get("model_filename", model_path)
         model_checkpoint_path = os.path.join(local_files_dir, model_filename)
 
@@ -63,10 +63,17 @@ class ARPGModel(DiffusionPipeline):
         model.eval()
 
         # download and load the vae
-        vae_checkpoint_path = hf_hub_download(
-            repo_id=kwargs.get("repo_id", "FoundationVision/LlamaGen"),
-            filename=kwargs.get("vae_filename", "vq_ds16_c2i.pt")
-        )
+        # vae_checkpoint_path = hf_hub_download(
+        #     repo_id=kwargs.get("repo_id", "FoundationVision/LlamaGen"),
+        #     filename=kwargs.get("vae_filename", "vq_ds16_c2i.pt")
+        # )
+
+        cur_dir = os.getcwd()
+        local_files_dir = os.path.join(cur_dir, "hfg_weights/llamagen")
+        model_filename = kwargs.get("model_filename", "vq_ds16_c2i.pt")
+        vae_checkpoint_path = os.path.join(local_files_dir, model_filename)
+
+        print(f"local vae path: {vae_checkpoint_path}")
 
         vae = VQ_models['VQ-16']()
 

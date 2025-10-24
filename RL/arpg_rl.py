@@ -373,12 +373,14 @@ class ARPGWithPolicy:
     def __init__(
         self,
         arpg_model,
+        vae_model,
         policy_net: PolicyNetwork,
-        reward_calc: AutomaticRewardCalculator,
+        reward_calculator: AutomaticRewardCalculator,
     ):
         self.arpg = arpg_model
+        self.vqvae = vae_model
         self.policy = policy_net
-        self.reward_calc = reward_calc
+        self.reward_calc = reward_calculator
     
     def generate_with_policy(
         self,
@@ -498,50 +500,112 @@ class ARPGWithPolicy:
             'final_reward': final_reward,
             'tokens': generated_tokens,
         }
-    
-    def _generate_at_positions(
-        self,
-        cond_idx: torch.Tensor,
-        current_tokens: torch.Tensor,
-        positions: torch.Tensor,
-        num_tokens: torch.Tensor,
-        temperature: float,
-        cfg_scale: float,
+
+    def _generate_at_positions_greedy(
+            self,
+            cond_idx: torch.Tensor,
+            current_tokens: torch.Tensor,
+            positions: torch.Tensor,
+            num_tokens: torch.Tensor,
+            cfg_scale: float = 1.0,
     ) -> torch.Tensor:
         """
-        Generate tokens at specified positions
-        
-        This is a placeholder - you need to implement this based on ARPG's API
+        Generate tokens using greedy decoding (argmax)
+        Useful for evaluation/inference
         """
-        # TODO: Implement actual token generation using ARPG
-        # For now, return random tokens as placeholder
         batch_size, seq_len = current_tokens.shape
+
         new_tokens = current_tokens.clone()
-        
+        input_tokens = current_tokens.clone()
+
+        # Mark positions to generate
+        mask_token_id = self.arpg.vocab_size
         for b in range(batch_size):
             n = num_tokens[b].item()
             valid_positions = positions[b, :n]
             valid_positions = valid_positions[valid_positions >= 0]
-            
-            # Placeholder: random tokens
-            new_tokens[b, valid_positions] = torch.randint(
-                0, self.arpg.vocab_size,
-                (len(valid_positions),),
-                device=current_tokens.device
-            )
-        
+            input_tokens[b, valid_positions] = mask_token_id
+
+        with torch.no_grad():
+            # CFG
+            if cfg_scale > 1.0:
+                input_tokens_cfg = torch.cat([input_tokens, input_tokens], dim=0)
+                cond_idx_cfg = torch.cat([
+                    cond_idx,
+                    torch.full_like(cond_idx, self.arpg.num_classes)
+                ], dim=0)
+            else:
+                input_tokens_cfg = input_tokens
+                cond_idx_cfg = cond_idx
+
+            # Forward
+            logits = self.arpg(input_tokens_cfg, cond_idx_cfg)
+
+            # CFG
+            if cfg_scale > 1.0:
+                logits_cond, logits_uncond = logits.chunk(2, dim=0)
+                logits = logits_uncond + cfg_scale * (logits_cond - logits_uncond)
+
+            # Greedy sampling
+            for b in range(batch_size):
+                n = num_tokens[b].item()
+                valid_positions = positions[b, :n]
+                valid_positions = valid_positions[valid_positions >= 0]
+
+                if len(valid_positions) == 0:
+                    continue
+
+                position_logits = logits[b, valid_positions, :self.arpg.vocab_size]
+                sampled_tokens = position_logits.argmax(dim=-1)
+
+                new_tokens[b, valid_positions] = sampled_tokens
+
         return new_tokens
-    
+
+    # ============================================================================
+    # Helper: Decode tokens to image
+    # ============================================================================
+
     def _decode_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
         """
-        Decode tokens to image
-        
-        This is a placeholder - you need to implement this based on ARPG's API
+        Decode tokens to image using VQ-VAE decoder
+
+        Args:
+            tokens: [batch, seq_len] token indices
+
+        Returns:
+            images: [batch, 3, H, W] decoded images
         """
-        # TODO: Implement actual decoding using ARPG
-        # For now, return random image as placeholder
-        batch_size = tokens.shape[0]
-        return torch.rand(batch_size, 3, 256, 256, device=tokens.device)
+        # This requires the VQ-VAE model used to train ARPG
+        # You need to load the corresponding VQ-VAE checkpoint
+
+        # Assuming you have vqvae model loaded as self.vqvae
+        if not hasattr(self, 'vqvae'):
+            raise RuntimeError(
+                "VQ-VAE model not loaded. Please load the VQ-VAE model first:\n"
+                "  self.vqvae = load_vqvae_model(checkpoint_path)\n"
+                "  self.vqvae.eval()"
+            )
+
+        with torch.no_grad():
+            # Reshape tokens to 2D grid (assuming square layout)
+            batch_size, seq_len = tokens.shape
+            grid_size = int(seq_len ** 0.5)
+            assert grid_size * grid_size == seq_len, f"seq_len {seq_len} must be a perfect square"
+
+            # Reshape to [batch, h, w]
+            token_grid = tokens.view(batch_size, grid_size, grid_size)
+
+            # Decode using VQ-VAE
+            # This depends on your VQ-VAE implementation
+            # Common interface: vqvae.decode_code(token_grid)
+            images = self.vqvae.decode_code(token_grid)
+
+            # Ensure output is in [0, 1] range
+            if images.min() < 0:
+                images = (images + 1) / 2  # from [-1, 1] to [0, 1]
+
+            return images
 
 
 # ============================================================================
@@ -625,7 +689,7 @@ def train_policy_grpo(
 
 
 def update_policy_step(
-    policy: PolicyNetwork,
+    policy_net: PolicyNetwork,
     trajectories: List[Dict],
     advantages: List[float],
     optimizer: torch.optim.Optimizer,
@@ -657,7 +721,7 @@ def update_policy_step(
             positions = step_data['positions']
             generated_mask = step_data['generated_mask']
             
-            parallel_dist, position_scores = policy(state, generated_mask)
+            parallel_dist, position_scores = policy_net(state, generated_mask)
             
             new_parallel_logprob = parallel_dist.log_prob(num_tokens)
             
@@ -700,7 +764,7 @@ def update_policy_step(
     # Backpropagation
     optimizer.zero_grad()
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
+    torch.nn.utils.clip_grad_norm_(policy_net.parameters(), max_norm=1.0)
     optimizer.step()
     
     return loss.item()
@@ -717,9 +781,9 @@ if __name__ == "__main__":
     # arpg_model = load_arpg_model()
     
     # 2. Create policy network
-    state_dim = 11 + 8  # basic stats + region coverage (without features)
-    policy_net = PolicyNetwork(
-        state_dim=state_dim,
+    state_feat_chan = 11 + 8  # basic stats + region coverage (without features)
+    policy = PolicyNetwork(
+        state_dim=state_feat_chan,
         hidden_dim=256,
         max_parallel=32,
         seq_len=256,
@@ -729,7 +793,7 @@ if __name__ == "__main__":
     reward_calc = AutomaticRewardCalculator(device='cuda')
     
     # 4. Create integrated model
-    # arpg_with_policy = ARPGWithPolicy(arpg_model, policy_net, reward_calc)
+    # arpg_with_policy = ARPGWithPolicy(arpg_model, policy, reward_calc)
     
     # 5. Prepare dataloader (you need to implement this)
     # dataloader = create_dataloader()

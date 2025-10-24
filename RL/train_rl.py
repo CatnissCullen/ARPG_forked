@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 # Import from the RL framework
-from arpg_rl_framework import (
+from arpg_rl import (
     PolicyNetwork,
     AutomaticRewardCalculator,
     ARPGWithPolicy,
@@ -73,26 +73,14 @@ def load_arpg_model(config):
     
     You need to implement this based on your ARPG checkpoint
     """
-    # TODO: Load actual ARPG model
-    # Example:
-    # from arpg import Transformer, ModelArgs
-    # model_args = ModelArgs(**config['model'])
-    # model = Transformer(model_args)
-    # checkpoint = torch.load(config['arpg_checkpoint'])
-    # model.load_state_dict(checkpoint['model'])
-    # model.eval()
-    # return model
-    
-    # Placeholder
-    class DummyARPG:
-        def __init__(self):
-            self.block_size = 256
-            self.vocab_size = 16384
-        
-        def eval(self):
-            pass
-    
-    return DummyARPG()
+    # DONE-TODO: Load actual ARPG model
+    from hfg_weights.arpg.arpg import Transformer, ModelArgs
+    model_args = ModelArgs(**config['model'])
+    model = Transformer(model_args)
+    checkpoint = torch.load(config['arpg_checkpoint'])
+    model.load_state_dict(checkpoint['model'])
+    model.eval()
+    return model
 
 
 # ============================================================================
@@ -173,7 +161,7 @@ def main(args):
     arpg_with_policy = ARPGWithPolicy(
         arpg_model=arpg_model,
         policy_net=policy_net,
-        reward_calc=reward_calc,
+        reward_calculator=reward_calc,
     )
     print("Integrated model created")
     
